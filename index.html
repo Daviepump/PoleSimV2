@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Pole Climbing 360 Simulator</title>
+    <style>
+      :root {
+        --bg: #101820;
+        --panel: #202d39;
+        --panel-2: #243642;
+        --text: #edf6ff;
+        --muted: #bfd4e5;
+        --line: rgba(255,255,255,0.12);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 15px Arial, sans-serif; }
+      body { min-height: 100vh; }
+
+      .screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+      .screen.hidden { display: none; }
+
+      .setup-card {
+        width: min(540px, 92vw);
+        background: rgba(12, 19, 24, 0.96);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 30px 28px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(28px, 5vw, 42px);
+        letter-spacing: 0.04em;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin: 0 0 24px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .field label {
+        font-weight: 600;
+      }
+
+      input[type="file"], button, input[type="range"] { font: inherit; }
+
+      input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #111d27;
+        color: var(--text);
+      }
+
+      input[type="file"]::file-selector-button {
+        margin-right: 12px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      button {
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 18px;
+        cursor: pointer;
+        transition: filter 0.15s ease, transform 0.15s ease;
+      }
+
+      button:hover { filter: brightness(1.08); }
+      button:active { transform: translateY(1px); }
+      .primary { background: #2f4f67; border-color: rgba(255,255,255,0.18); font-weight: 700; }
+
+      .status {
+        min-height: 22px;
+        margin-top: 16px;
+        color: var(--muted);
+      }
+
+      .status.error { color: #ffb5b5; }
+
+      #simulatorScreen {
+        position: relative;
+        min-height: 100vh;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      #scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100vh;
+      }
+
+      #topControls {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translate(-50%, -12px);
+        width: min(94vw, 1100px);
+        z-index: 30;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+      }
+
+      #topControls.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+        pointer-events: auto;
+      }
+
+      .controls-shell {
+        background: rgba(18, 28, 35, 0.72);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+        padding: 10px 12px;
+      }
+
+      .controls-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .dropdown {
+        position: relative;
+      }
+
+      .dropdown summary {
+        list-style: none;
+        cursor: pointer;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .dropdown summary::-webkit-details-marker { display: none; }
+
+      .dropdown-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        min-width: 280px;
+        background: rgba(18, 28, 35, 0.95);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 12px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+      }
+
+      .settings-panel {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        background: rgba(255,255,255,0.03);
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+
+      label { display: flex; align-items: center; gap: 7px; }
+      input[type="range"] { width: 130px; }
+      .toggle { display: flex; align-items: center; gap: 8px; }
+      .toggle input { width: auto; }
+
+      .play-pause {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        z-index: 25;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.28);
+        background: rgba(16, 24, 32, 0.76);
+        color: var(--text);
+        font-size: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.25);
+      }
+
+      .paused-input-toggle {
+        position: fixed;
+        left: 50%;
+        bottom: 94px;
+        transform: translateX(-50%);
+        z-index: 25;
+        background: rgba(16, 24, 32, 0.76);
+        color: var(--text);
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 999px;
+        padding: 8px 14px;
+        min-width: 140px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.2);
+      }
+
+      .paused-input-toggle.hidden {
+        display: none;
+      }
+
+      .camera-preview-wrap {
+        width: 180px;
+        height: 120px;
+        overflow: hidden;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #000;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+      }
+
+      #camPreview {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #000;
+      }
+
+      #status {
+        position: absolute;
+        left: 20px;
+        bottom: 20px;
+        z-index: 21;
+        padding: 9px 12px;
+        color: #b9d4e9;
+        background: rgba(16, 24, 32, 0.7);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        backdrop-filter: blur(4px);
+        max-width: min(480px, calc(100vw - 120px));
+      }
+      video { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="setupScreen" class="screen">
+      <div class="setup-card">
+        <h1>Pole Simulator</h1>
+        <p class="subtitle">Select a local 360° video file, turn the camera on if you want head tracking, then press START.</p>
+
+        <div class="field">
+          <label for="setupVideo">Video file</label>
+          <input id="setupVideo" type="file" accept="video/mp4,video/*" />
+        </div>
+
+        <div class="button-row">
+          <button id="toggleCamera" type="button">Enable Camera</button>
+          <button id="calibrateCamera" type="button">Calibrate Camera</button>
+          <button id="startBtn" type="button" class="primary">START</button>
+        </div>
+
+        <p id="setupStatus" class="status" aria-live="polite">No video selected yet.</p>
+      </div>
+    </div>
+
+    <div id="simulatorScreen" class="screen hidden">
+      <div id="topControls">
+        <div class="controls-shell">
+          <div class="controls-row">
+            <strong>360° Pole Simulator</strong>
+            <button id="track">Enable webcam tracking</button>
+            <button id="calibrate">Calibrate Head Tracking</button>
+            <button id="center">Recenter</button>
+            <button id="setCentre">Set as Centre</button>
+            <button id="resetCentre">Reset Video Centre</button>
+
+            <details class="dropdown">
+              <summary>View</summary>
+              <div class="dropdown-panel">
+                <div class="settings-panel">
+                  <label>Horizontal <span id="horizontalRangeLabel">180° (90° left / 90° right)</span><input id="horizRange" type="range" min="30" max="360" step="10" value="180"></label>
+                  <label>Vertical <span id="verticalRangeLabel">150° (75° up / 75° down)</span><input id="vertRange" type="range" min="30" max="180" step="10" value="150"></label>
+                </div>
+                <div class="settings-panel">
+                  <div id="viewingDirection" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.04);white-space:nowrap;">Looking: 0° right, 0° up</div>
+                  <div id="savedCentreDisplay" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.04);white-space:nowrap;">Saved centre (global default): 0° right, 0° up</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="dropdown">
+              <summary>Adjust</summary>
+              <div class="dropdown-panel">
+                <div class="settings-panel">
+                  <label>Horizontal <span id="horizontalValue">1.5×</span><input id="horizSens" type="range" min="0.5" max="3" step="0.1" value="1.5"></label>
+                  <label>Vertical <span id="verticalValue">1.7×</span><input id="vertSens" type="range" min="0.5" max="4" step="0.1" value="1.7"></label>
+                </div>
+                <div class="settings-panel">
+                  <label>Smoothing <span id="smoothingValue">75%</span><input id="smoothing" type="range" min="0" max="100" step="1" value="75"></label>
+                  <label>Dead Zone <span id="deadzoneValue">2.0°</span><input id="deadzone" type="range" min="0" max="20" step="0.5" value="2"></label>
+                  <label>Max Speed <span id="maxspeedValue">120°/s</span><input id="maxspeed" type="range" min="20" max="240" step="5" value="120"></label>
+                  <label class="toggle"><input id="invertVertical" type="checkbox" checked>Invert Vertical Tracking</label>
+                </div>
+              </div>
+            </details>
+
+            <details class="dropdown">
+              <summary>Camera</summary>
+              <div class="dropdown-panel">
+                <div class="settings-panel">
+                  <div class="camera-preview-wrap">
+                    <video id="camPreview" playsinline autoplay muted></video>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div id="scene"></div>
+      <video id="video" playsinline muted></video>
+      <video id="cam" autoplay playsinline muted></video>
+      <button id="playPause" class="play-pause" type="button" aria-label="Pause video">⏸</button>
+      <button id="pausedInputMode" class="paused-input-toggle" type="button" aria-label="Choose paused viewing mode">Mode: Mouse</button>
+      <div id="status">Choose your exported 360° MP4. Drag with the mouse to look around.</div>
+    </div>
+
+    <script type="module">
+      import * as THREE from './vendor/three/three.module.js';
+      import { FaceLandmarker, FilesetResolver } from './vendor/tasks-vision/vision_bundle.mjs';
+
+      const $ = id => document.getElementById(id);
+      const setupScreen = $('setupScreen');
+      const simulatorScreen = $('simulatorScreen');
+      const setupVideo = $('setupVideo');
+      const setupStatus = $('setupStatus');
+      const toggleCameraBtn = $('toggleCamera');
+      const calibrateCameraBtn = $('calibrateCamera');
+      const startBtn = $('startBtn');
+      const playPauseBtn = $('playPause');
+      const pausedInputModeBtn = $('pausedInputMode');
+      const topControls = $('topControls');
+      const status = $('status');
+      const video = $('video');
+      const cam = $('cam');
+      const camPreview = $('camPreview');
+      const wasmBaseUrl = new URL('./vendor/tasks-vision/wasm/', window.location.href).href;
+      const modelUrl = new URL('./vendor/models/face_landmarker.task', window.location.href).href;
+
+      let yaw = 0, pitch = 0, baseYaw = 0, basePitch = 0, tracking = false, landmarker = null, previous = 0, neutral = null, stream = null, renderer = null, camera = null;
+      let dragging = false, x0 = 0, y0 = 0;
+      let trackYaw = 0, trackPitch = 0, desiredTrackYaw = 0, desiredTrackPitch = 0, lastFrameTime = performance.now();
+      let pausedInputMode = 'mouse';
+      let zoom = 1.0;
+      let calibrationActive = false, calibrationStart = 0, calibrationDeadline = 0, calibrationSamples = [], calibrationStableMs = 0, calibrationLostMs = 0;
+      let videoCenterYaw = 0, videoCenterPitch = 0;
+      let topControlsTimer = null;
+
+      function attachStreamToVideo(targetVideo, mediaStream) {
+        if (!targetVideo) return;
+        targetVideo.srcObject = mediaStream;
+        targetVideo.muted = true;
+        targetVideo.playsInline = true;
+        if (targetVideo === camPreview || targetVideo === cam) {
+          targetVideo.autoplay = true;
+        }
+        return targetVideo.play().catch((error) => {
+          console.warn('Video element play request was blocked.', error);
+        });
+      }
+
+      function resizeRenderer() {
+        if (!renderer || !camera) return;
+        const rect = $('scene').getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width));
+        const height = Math.max(1, Math.round(rect.height));
+        if (renderer.domElement.width !== width || renderer.domElement.height !== height) {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(width, height, false);
+        }
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+
+      function showSimulatorScreen() {
+        setupScreen.classList.add('hidden');
+        simulatorScreen.classList.remove('hidden');
+        resetCameraToVideoCentre();
+        neutral = { x: 0, y: 0 };
+        trackYaw = 0; trackPitch = 0; desiredTrackYaw = 0; desiredTrackPitch = 0; baseYaw = 0; basePitch = 0; yaw = 0; pitch = 0;
+        if (video.src) {
+          video.pause();
+          try {
+            video.currentTime = 0;
+          } catch (error) {
+            console.warn('Could not reset video position to the start.', error);
+          }
+        }
+        requestAnimationFrame(() => {
+          resizeRenderer();
+          syncPlayButton();
+          status.textContent = 'Video paused. Press the play button to start the 360° view.';
+        });
+      }
+
+      function clamp(value, min, max) { return Math.min(Math.max(value, min), max); }
+      function degToRad(value) { return value * Math.PI / 180; }
+      function radToDeg(value) { return value * 180 / Math.PI; }
+      function normalizeAngleRadians(value) { return ((value + Math.PI) % (Math.PI * 2)) - Math.PI; }
+
+      function getVideoCenterStorageKey() {
+        const key = video.dataset.videoKey || 'global-default';
+        return `poleSimulatorVideoCenter:${key}`;
+      }
+
+      function getVideoCenterLabel() {
+        const key = video.dataset.videoKey || 'global-default';
+        return key === 'global-default' ? 'global default' : `video: ${key}`;
+      }
+
+      function saveVideoCentre() {
+        const payload = { yaw: radToDeg(videoCenterYaw), pitch: radToDeg(videoCenterPitch) };
+        localStorage.setItem(getVideoCenterStorageKey(), JSON.stringify(payload));
+      }
+
+      function loadVideoCentre() {
+        const key = getVideoCenterStorageKey();
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return false;
+          const saved = JSON.parse(raw);
+          if (!saved || typeof saved !== 'object') return false;
+          const savedYaw = normalizeAngleRadians(degToRad(Number(saved.yaw || 0)));
+          const savedPitch = clamp(degToRad(Number(saved.pitch || 0)), -degToRad(89), degToRad(89));
+          videoCenterYaw = savedYaw;
+          videoCenterPitch = savedPitch;
+          return true;
+        } catch (error) {
+          console.warn('Failed to restore saved video centre', error);
+          return false;
+        }
+      }
+
+      function resetCameraToVideoCentre() {
+        yaw = 0; pitch = 0; baseYaw = 0; basePitch = 0; trackYaw = 0; trackPitch = 0; desiredTrackYaw = 0; desiredTrackPitch = 0; neutral = null;
+      }
+
+      function getHeadPoseFromLandmarks(faceLandmarks) {
+        const p = faceLandmarks[0], nose = p[1], left = p[33], right = p[263], top = p[10], bottom = p[152];
+        return {
+          x: (nose.x - (left.x + right.x) / 2) / Math.max(0.01, Math.abs(right.x - left.x)),
+          y: (nose.y - (top.y + bottom.y) / 2) / Math.max(0.01, Math.abs(bottom.y - top.y))
+        };
+      }
+
+      function averagePose(samples) {
+        if (!samples.length) return { x: 0, y: 0 };
+        let sumX = 0, sumY = 0;
+        for (const sample of samples) {
+          sumX += sample.x;
+          sumY += sample.y;
+        }
+        return { x: sumX / samples.length, y: sumY / samples.length };
+      }
+
+      function updateSettingLabels() {
+        const horizRange = Number($('horizRange').value);
+        const vertRange = Number($('vertRange').value);
+        const halfHoriz = horizRange / 2;
+        const halfVert = vertRange / 2;
+        $('horizontalRangeLabel').textContent = `${horizRange.toFixed(0)}° (${halfHoriz.toFixed(0)}° left / ${halfHoriz.toFixed(0)}° right)`;
+        $('verticalRangeLabel').textContent = `${vertRange.toFixed(0)}° (${halfVert.toFixed(0)}° up / ${halfVert.toFixed(0)}° down)`;
+        $('deadzoneValue').textContent = Number($('deadzone').value).toFixed(1) + '°';
+        $('smoothingValue').textContent = Number($('smoothing').value).toFixed(0) + '%';
+        $('horizontalValue').textContent = Number($('horizSens').value).toFixed(1) + '×';
+        $('verticalValue').textContent = Number($('vertSens').value).toFixed(1) + '×';
+        $('maxspeedValue').textContent = Number($('maxspeed').value).toFixed(0) + '°/s';
+
+        const currentYaw = radToDeg(yaw || 0);
+        const currentPitch = radToDeg(pitch || 0);
+        const yawDirection = currentYaw >= 0 ? 'right' : 'left';
+        const pitchDirection = currentPitch >= 0 ? 'up' : 'down';
+        $('viewingDirection').textContent = `Looking: ${Math.abs(currentYaw).toFixed(0)}° ${yawDirection}, ${Math.abs(currentPitch).toFixed(0)}° ${pitchDirection}`;
+
+        const savedYaw = radToDeg(videoCenterYaw || 0);
+        const savedPitch = radToDeg(videoCenterPitch || 0);
+        const savedYawDirection = savedYaw >= 0 ? 'right' : 'left';
+        const savedPitchDirection = savedPitch >= 0 ? 'up' : 'down';
+        $('savedCentreDisplay').textContent = `Saved centre (${getVideoCenterLabel()}): ${Math.abs(savedYaw).toFixed(0)}° ${savedYawDirection}, ${Math.abs(savedPitch).toFixed(0)}° ${savedPitchDirection}`;
+      }
+
+      ['deadzone', 'smoothing', 'horizSens', 'vertSens', 'invertVertical', 'maxspeed', 'horizRange', 'vertRange'].forEach(id => {
+        $(id).addEventListener('input', updateSettingLabels);
+        $(id).addEventListener('change', updateSettingLabels);
+      });
+
+      function bindVideo(file) {
+        if (!file) {
+          setupStatus.textContent = 'No video file selected.';
+          setupStatus.classList.add('error');
+          return;
+        }
+
+        if (!file.type.startsWith('video/')) {
+          setupStatus.textContent = `Selected file "${file.name}" is not a supported video. Please choose an MP4 or another browser-supported video file.`;
+          setupStatus.classList.add('error');
+          return;
+        }
+
+        video.dataset.fileName = file.name;
+        video.dataset.videoKey = file.name || 'global-default';
+        videoCenterYaw = 0;
+        videoCenterPitch = 0;
+        loadVideoCentre();
+        resetCameraToVideoCentre();
+
+        if (video.src) {
+          URL.revokeObjectURL(video.src);
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        video.src = objectUrl;
+        video.load();
+        video.pause();
+        setupStatus.textContent = `Loaded ${file.name}. Press START when ready.`;
+        setupStatus.classList.remove('error');
+      }
+
+      setupVideo.addEventListener('change', () => {
+        const file = setupVideo.files && setupVideo.files[0];
+        if (!file) {
+          setupStatus.textContent = 'No video selected yet.';
+          return;
+        }
+        bindVideo(file);
+      });
+
+      startBtn.addEventListener('click', () => {
+        if (!setupVideo.files || !setupVideo.files[0]) {
+          setupStatus.textContent = 'Please choose a video file before starting.';
+          setupStatus.classList.add('error');
+          return;
+        }
+
+        if (!video.src || video.error || video.readyState < 2) {
+          setupStatus.textContent = 'The video is still loading or unavailable. Please choose a valid local MP4 and wait for it to finish loading.';
+          setupStatus.classList.add('error');
+          return;
+        }
+
+        setupStatus.classList.remove('error');
+        showSimulatorScreen();
+      });
+
+      async function ensureCameraReady() {
+        if (stream) return;
+        try {
+          setupStatus.textContent = 'Starting camera...';
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          attachStreamToVideo(cam, stream);
+          attachStreamToVideo(camPreview, stream);
+          toggleCameraBtn.dataset.on = 'true';
+          toggleCameraBtn.textContent = 'Disable Camera';
+          setupStatus.textContent = 'Camera is ready. You can calibrate or press START.';
+          setupStatus.classList.remove('error');
+        } catch (error) {
+          console.error('Camera failed', error);
+          setupStatus.textContent = 'Camera access was denied or unavailable. Please allow camera access or disable webcam tracking.';
+          setupStatus.classList.add('error');
+          throw error;
+        }
+      }
+
+      async function ensureLandmarkerReady() {
+        if (!landmarker) {
+          const vision = await FilesetResolver.forVisionTasks(wasmBaseUrl);
+          landmarker = await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: 'CPU' },
+            runningMode: 'VIDEO',
+            numFaces: 1
+          });
+        }
+      }
+
+      async function ensureTrackingReady() {
+        await ensureCameraReady();
+        await ensureLandmarkerReady();
+        if (!tracking) {
+          tracking = true;
+          const trackButton = $('track');
+          if (trackButton) trackButton.textContent = 'Disable webcam tracking';
+        }
+      }
+
+      let calibrationFrameId = null;
+
+      function stopCalibrationFrame() {
+        if (calibrationFrameId) {
+          cancelAnimationFrame(calibrationFrameId);
+          calibrationFrameId = null;
+        }
+      }
+
+      function resetCalibrationState() {
+        calibrationActive = false;
+        calibrationSamples = [];
+        calibrationStart = 0;
+        calibrationDeadline = 0;
+        calibrationStableMs = 0;
+        calibrationLostMs = 0;
+        stopCalibrationFrame();
+      }
+
+      async function startCalibration() {
+        try {
+          setupStatus.classList.remove('error');
+          await ensureCameraReady();
+          await ensureLandmarkerReady();
+
+          resetCalibrationState();
+          calibrationSamples = [];
+          calibrationActive = true;
+          calibrationStart = performance.now();
+          calibrationDeadline = calibrationStart + 6000;
+          calibrationStableMs = 0;
+          calibrationLostMs = 0;
+          status.textContent = 'Keep your head still and look straight ahead. Calibration will complete after 3 seconds of stable tracking.';
+          setupStatus.textContent = 'Calibrating camera...';
+        } catch (error) {
+          console.error('Calibration failed', error);
+          resetCalibrationState();
+          setupStatus.textContent = 'Calibration failed: ' + (error && error.message ? error.message : String(error));
+          setupStatus.classList.add('error');
+        }
+      }
+
+      async function calibrateCamera() {
+        await startCalibration();
+      }
+
+      toggleCameraBtn.addEventListener('click', async () => {
+        const isOn = toggleCameraBtn.dataset.on === 'true';
+        if (isOn) {
+          if (stream) stream.getTracks().forEach(track => track.stop());
+          stream = null;
+          toggleCameraBtn.dataset.on = 'false';
+          toggleCameraBtn.textContent = 'Enable Camera';
+          setupStatus.textContent = 'Camera turned off.';
+          stopCalibrationFrame();
+          calibrationActive = false;
+          return;
+        }
+
+        try {
+          await ensureCameraReady();
+        } catch (error) {
+          console.error('Camera failed', error);
+        }
+      });
+
+      calibrateCameraBtn.addEventListener('click', calibrateCamera);
+
+      try {
+        const scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(80, 1, 0.1, 1100);
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setClearColor(0x101820, 1);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        $('scene').appendChild(renderer.domElement);
+
+        const geometry = new THREE.SphereGeometry(500, 64, 40);
+        geometry.scale(-1, 1, 1);
+        const texture = new THREE.VideoTexture(video);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sphere = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture }));
+        scene.add(sphere);
+
+        const viewTarget = new THREE.Group();
+        viewTarget.add(sphere);
+        scene.add(viewTarget);
+
+        addEventListener('resize', resizeRenderer);
+        if (typeof ResizeObserver !== 'undefined') {
+          const sceneResizeObserver = new ResizeObserver(() => resizeRenderer());
+          sceneResizeObserver.observe($('scene'));
+        }
+
+        resizeRenderer();
+
+        function draw() {
+          requestAnimationFrame(draw);
+
+          const now = performance.now();
+          const dt = clamp((now - lastFrameTime) / 1000, 0.016, 0.1);
+          lastFrameTime = now;
+
+          if (calibrationActive) {
+            const elapsed = now - calibrationStart;
+            const cameraReady = Boolean(landmarker && cam && cam.readyState >= 2 && stream);
+            const remaining = Math.max(0, 3 - calibrationStableMs / 1000);
+            status.textContent = 'Sit comfortably, face the centre of the screen and look straight ahead. ' + remaining.toFixed(1) + 's';
+
+            if (!cameraReady) {
+              if (elapsed > 5000) {
+                resetCalibrationState();
+                status.textContent = 'Calibration failed: webcam tracking is unavailable. Please enable the camera and try again.';
+              } else {
+                status.textContent = 'Camera is starting. Please wait a moment...';
+              }
+            } else {
+              try {
+                const result = landmarker.detectForVideo(cam, now);
+                if (result.faceLandmarks?.length) {
+                  const pose = getHeadPoseFromLandmarks(result.faceLandmarks);
+                  calibrationSamples.push(pose);
+                  if (calibrationSamples.length > 60) calibrationSamples.shift();
+
+                  const sampleWindow = calibrationSamples.slice(-12);
+                  const xSpread = sampleWindow.length ? Math.max(...sampleWindow.map(s => Math.abs(s.x - pose.x))) : 0;
+                  const ySpread = sampleWindow.length ? Math.max(...sampleWindow.map(s => Math.abs(s.y - pose.y))) : 0;
+
+                  if (xSpread <= 0.5 && ySpread <= 0.5) {
+                    calibrationStableMs += dt * 1000;
+                    calibrationLostMs = 0;
+                    status.textContent = 'Keep your head still and look straight ahead. ' + Math.max(0, 3 - calibrationStableMs / 1000).toFixed(1) + 's';
+                  } else {
+                    calibrationStableMs = 0;
+                    calibrationLostMs += dt * 1000;
+                    status.textContent = 'A little movement was detected. Hold still to finish calibration.';
+                  }
+                } else {
+                  calibrationLostMs += dt * 1000;
+                  if (calibrationLostMs > 1000) {
+                    status.textContent = 'Looking for your face in the camera...';
+                  }
+                }
+
+                if (calibrationStableMs >= 3000 && calibrationSamples.length >= 10) {
+                  neutral = averagePose(calibrationSamples.slice(-20));
+                  trackYaw = 0; trackPitch = 0; baseYaw = yaw; basePitch = pitch;
+                  resetCalibrationState();
+                  status.textContent = 'Calibration Complete';
+                  setupStatus.textContent = 'Camera calibration complete.';
+                  setupStatus.classList.remove('error');
+                } else if (elapsed >= 6000) {
+                  resetCalibrationState();
+                  status.textContent = 'Calibration failed: face tracking could not stay stable for 3 seconds. Please try again.';
+                  setupStatus.textContent = 'Calibration failed: face tracking could not stay stable for 3 seconds.';
+                  setupStatus.classList.add('error');
+                }
+              } catch (error) {
+                console.error('Face tracking error during calibration', error);
+                calibrationLostMs += dt * 1000;
+                status.textContent = 'Face tracking error. Holding the current frame and continuing the calibration attempt...';
+                if (elapsed > 6000) {
+                  resetCalibrationState();
+                  status.textContent = 'Calibration failed: face tracking error. Please try again.';
+                  setupStatus.textContent = 'Calibration failed: face tracking error. Please try again.';
+                  setupStatus.classList.add('error');
+                }
+              }
+            }
+          } else {
+            const maxHorizontalDeg = Number($('horizRange').value) / 2;
+            const maxVerticalDeg = Math.min(Number($('vertRange').value) / 2, 89);
+
+            const allowPausedTracking = !video.paused || pausedInputMode === 'tracking';
+          if (landmarker && cam && cam.readyState >= 2 && allowPausedTracking) {
+              if (now - previous > 60) {
+                previous = now;
+                try {
+                  const result = landmarker.detectForVideo(cam, now);
+                  if (result.faceLandmarks?.length) {
+                    const pose = getHeadPoseFromLandmarks(result.faceLandmarks);
+                    const horizontal = pose.x;
+                    const vertical = pose.y;
+                    const sensitivity = Number($('horizSens').value);
+                    const vertSensitivity = Number($('vertSens').value);
+                    const deadZone = Number($('deadzone').value);
+                    const invertVertical = $('invertVertical').checked;
+
+                    if (Math.abs(horizontal) > deadZone / 100) {
+                      desiredTrackYaw = (horizontal * sensitivity * 1.2) * (maxHorizontalDeg / 100) * 2.5;
+                    } else {
+                      desiredTrackYaw *= 0.7;
+                      if (Math.abs(desiredTrackYaw) < 0.01) desiredTrackYaw = 0;
+                    }
+
+                    if (Math.abs(vertical) > deadZone / 100) {
+                      let direction = vertical * vertSensitivity * 1.5;
+                      if (invertVertical) direction *= -1;
+                      desiredTrackPitch = direction * (maxVerticalDeg / 100) * 2.8;
+                    } else {
+                      desiredTrackPitch *= 0.7;
+                      if (Math.abs(desiredTrackPitch) < 0.01) desiredTrackPitch = 0;
+                    }
+                  } else {
+                    desiredTrackYaw *= 0.7; desiredTrackPitch *= 0.7;
+                    if (Math.abs(desiredTrackYaw) < 0.01) desiredTrackYaw = 0;
+                    if (Math.abs(desiredTrackPitch) < 0.01) desiredTrackPitch = 0;
+                  }
+                } catch (error) {
+                  console.error('Face tracking error while tracking', error);
+                  status.textContent = 'Tracking briefly paused because webcam detection failed. Mouse controls still work.';
+                  desiredTrackYaw *= 0.7; desiredTrackPitch *= 0.7;
+                }
+              }
+            } else {
+              desiredTrackYaw *= 0.7; desiredTrackPitch *= 0.7;
+              if (Math.abs(desiredTrackYaw) < 0.01) desiredTrackYaw = 0;
+              if (Math.abs(desiredTrackPitch) < 0.01) desiredTrackPitch = 0;
+            }
+
+            const smoothingPct = Number($('smoothing').value);
+            const maxSpeedDegPerSecond = Number($('maxspeed').value || 120);
+            const tauSeconds = 0.12 + ((100 - smoothingPct) / 100) * 0.7;
+            const alpha = 1 - Math.exp(-dt / Math.max(0.04, tauSeconds));
+
+            const nextTrackYaw = trackYaw + (desiredTrackYaw - trackYaw) * alpha;
+            const nextTrackPitch = trackPitch + (desiredTrackPitch - trackPitch) * alpha;
+            const maxStepYaw = degToRad(maxSpeedDegPerSecond * dt);
+            const maxStepPitch = degToRad(maxSpeedDegPerSecond * dt);
+            trackYaw = clamp(nextTrackYaw - trackYaw, -maxStepYaw, maxStepYaw) + trackYaw;
+            trackPitch = clamp(nextTrackPitch - trackPitch, -maxStepPitch, maxStepPitch) + trackPitch;
+
+            yaw = baseYaw + trackYaw;
+            pitch = clamp(basePitch + trackPitch, -degToRad(maxVerticalDeg), degToRad(maxVerticalDeg));
+            yaw = clamp(yaw, -degToRad(maxHorizontalDeg), degToRad(maxHorizontalDeg));
+          }
+
+          const maxHorizontalDeg = Number($('horizRange').value) / 2;
+          const maxVerticalDeg = Math.min(Number($('vertRange').value) / 2, 89);
+          const renderedYaw = normalizeAngleRadians(yaw + videoCenterYaw);
+          const renderedPitch = clamp(pitch + videoCenterPitch, -degToRad(maxVerticalDeg), degToRad(maxVerticalDeg));
+
+          if (camera) {
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = renderedYaw;
+            camera.rotation.x = renderedPitch;
+            camera.position.z = 0.1;
+          }
+          if (renderer) renderer.render(scene, camera);
+          updateSettingLabels();
+
+          if (video.paused) {
+            const idleLookAdjustment = 0.12;
+            if (Math.abs(desiredTrackYaw) < idleLookAdjustment) desiredTrackYaw *= 0.7;
+            if (Math.abs(desiredTrackPitch) < idleLookAdjustment) desiredTrackPitch *= 0.7;
+          }
+        }
+
+        draw();
+
+        renderer.domElement.onpointerdown = e => {
+          const allowMouseDrag = !video.paused || pausedInputMode === 'mouse';
+          if (!allowMouseDrag) return;
+          dragging = true;
+          x0 = e.clientX; y0 = e.clientY;
+          renderer.domElement.setPointerCapture(e.pointerId);
+        };
+
+        renderer.domElement.onpointerup = () => { dragging = false; };
+        renderer.domElement.onpointermove = e => {
+          if (!dragging) return;
+          if (!video.paused || pausedInputMode === 'mouse') {
+            const dx = e.clientX - x0;
+            const dy = e.clientY - y0;
+            x0 = e.clientX; y0 = e.clientY;
+            const maxHorizontalDeg = Number($('horizRange').value) / 2;
+            const maxVerticalDeg = Math.min(Number($('vertRange').value) / 2, 89);
+            yaw -= dx * 0.004;
+            pitch = clamp(pitch - dy * 0.004, -degToRad(maxVerticalDeg), degToRad(maxVerticalDeg));
+            yaw = clamp(yaw, -degToRad(maxHorizontalDeg), degToRad(maxHorizontalDeg));
+            baseYaw = yaw; basePitch = pitch; neutral = null;
+          }
+        };
+
+        renderer.domElement.addEventListener('wheel', (event) => {
+          event.preventDefault();
+          const delta = event.deltaY > 0 ? 0.08 : -0.08;
+          zoom = clamp(zoom + delta, 0.7, 2.4);
+          camera.zoom = zoom;
+          camera.updateProjectionMatrix();
+          status.textContent = `Zoom: ${zoom.toFixed(2)}×`;
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+      } catch (error) {
+        console.error('Three.js initialisation failed', error);
+        status.textContent = 'Three.js failed to initialise: ' + (error && error.message ? error.message : String(error)) + '. WebGL is required for the 360° view.';
+        throw error;
+      }
+
+      video.addEventListener('loadstart', () => {
+        status.textContent = 'Loading 360° video...';
+      });
+
+      video.addEventListener('error', () => {
+        const message = video.error && video.error.message ? video.error.message : 'Unknown video loading error';
+        console.error('Video failed to load', video.error);
+        status.textContent = 'Video failed to load: ' + message + '. Please choose a valid local MP4 file.';
+      });
+
+      video.addEventListener('loadedmetadata', () => {
+        const fileName = video.dataset.fileName || 'video';
+        if (!video.src) {
+          status.textContent = 'No 360° video is selected yet.';
+          return;
+        }
+        status.textContent = 'Loaded ' + fileName + '. Drag to look around or enable webcam tracking.';
+      });
+
+      video.addEventListener('pause', () => {
+        if (video.dataset.fileName) {
+          status.textContent = 'Video paused. Press the play button to resume the 360° view.';
+        }
+        syncPlayButton();
+      });
+
+      video.addEventListener('playing', () => {
+        if (video.dataset.fileName) {
+          status.textContent = 'Video playing. Drag to look around or enable webcam tracking.';
+        }
+        syncPlayButton();
+      });
+
+      video.addEventListener('waiting', () => {
+        if (video.dataset.fileName) {
+          status.textContent = 'Video is buffering. Please wait...';
+        }
+      });
+
+      function syncPlayButton() {
+        if (!video) return;
+        playPauseBtn.textContent = video.paused ? '▶' : '⏸';
+        playPauseBtn.setAttribute('aria-label', video.paused ? 'Play video' : 'Pause video');
+
+        if (!pausedInputModeBtn) return;
+        if (!video.paused) {
+          pausedInputModeBtn.classList.add('hidden');
+          pausedInputModeBtn.textContent = `Mode: ${pausedInputMode === 'mouse' ? 'Mouse' : 'Tracking'}`;
+          return;
+        }
+
+        pausedInputModeBtn.classList.remove('hidden');
+        pausedInputModeBtn.textContent = `Mode: ${pausedInputMode === 'mouse' ? 'Mouse' : 'Tracking'}`;
+      }
+
+      pausedInputModeBtn.addEventListener('click', () => {
+        pausedInputMode = pausedInputMode === 'mouse' ? 'tracking' : 'mouse';
+        syncPlayButton();
+        status.textContent = video.paused
+          ? (pausedInputMode === 'mouse'
+              ? 'Paused: mouse drag is active.'
+              : 'Paused: head tracking is active.')
+          : status.textContent;
+      });
+
+      playPauseBtn.addEventListener('click', () => {
+        if (!video.src) {
+          status.textContent = 'Please choose a video file first.';
+          return;
+        }
+        if (video.paused) {
+          video.play().then(() => {
+            status.textContent = 'Video playing. Drag to look around or enable webcam tracking.';
+          }).catch((error) => {
+            console.error('Video playback failed when the user pressed play.', error);
+            status.textContent = 'Video playback failed. Please check the file format or try a different local MP4.';
+          });
+        } else {
+          video.pause();
+        }
+        syncPlayButton();
+      });
+
+      function resetZoom() {
+        zoom = 1.0;
+        if (camera) {
+          camera.zoom = zoom;
+          camera.updateProjectionMatrix();
+        }
+      }
+
+      video.addEventListener('play', syncPlayButton);
+      video.addEventListener('pause', syncPlayButton);
+
+      function showTopControls() {
+        if (!topControls) return;
+        topControls.classList.add('visible');
+        clearTimeout(topControlsTimer);
+      }
+
+      function hideTopControls() {
+        if (!topControls) return;
+        clearTimeout(topControlsTimer);
+        topControlsTimer = setTimeout(() => {
+          topControls.classList.remove('visible');
+        }, 2000);
+      }
+
+      document.addEventListener('mousemove', (event) => {
+        if (event.clientY <= 80) {
+          showTopControls();
+        } else if (!topControls.matches(':hover')) {
+          hideTopControls();
+        }
+      });
+
+      topControls.addEventListener('mouseenter', showTopControls);
+      topControls.addEventListener('mouseleave', hideTopControls);
+
+      document.addEventListener('pointerdown', (event) => {
+        if (window.innerHeight - event.clientY <= 90) {
+          showTopControls();
+        }
+      });
+
+      $('center').onclick = () => {
+        if (tracking && landmarker && $('cam').readyState >= 2) {
+          const result = landmarker.detectForVideo($('cam'), performance.now());
+          if (result.faceLandmarks?.length) {
+            neutral = getHeadPoseFromLandmarks(result.faceLandmarks);
+            trackYaw = 0; trackPitch = 0; desiredTrackYaw = 0; desiredTrackPitch = 0; baseYaw = 0; basePitch = 0; yaw = 0; pitch = 0;
+            status.textContent = 'Tracking recentered to the saved video centre.';
+            return;
+          }
+        }
+
+        neutral = { x: 0, y: 0 };
+        trackYaw = 0; trackPitch = 0; desiredTrackYaw = 0; desiredTrackPitch = 0; baseYaw = 0; basePitch = 0; yaw = 0; pitch = 0;
+        status.textContent = 'Recentered to the saved video centre. Keep your head still while the view settles.';
+      };
+
+      $('setCentre').onclick = () => {
+        const maxVerticalDeg = Math.min(Number($('vertRange').value) / 2, 89);
+        const currentActualYaw = normalizeAngleRadians(videoCenterYaw + yaw);
+        const currentActualPitch = clamp(videoCenterPitch + pitch, -degToRad(maxVerticalDeg), degToRad(maxVerticalDeg));
+        videoCenterYaw = currentActualYaw;
+        videoCenterPitch = currentActualPitch;
+        saveVideoCentre();
+        resetCameraToVideoCentre();
+        status.textContent = `Video centre set to ${Math.abs(radToDeg(videoCenterYaw)).toFixed(0)}° ${radToDeg(videoCenterYaw) >= 0 ? 'right' : 'left'}, ${Math.abs(radToDeg(videoCenterPitch)).toFixed(0)}° ${radToDeg(videoCenterPitch) >= 0 ? 'up' : 'down'}.`;
+      };
+
+      $('resetCentre').onclick = () => {
+        videoCenterYaw = 0; videoCenterPitch = 0; saveVideoCentre(); resetCameraToVideoCentre();
+        status.textContent = 'Video centre reset to the original 360° orientation.';
+      };
+
+      $('calibrate').onclick = async () => {
+        try {
+          await ensureTrackingReady();
+          tracking = true;
+          await startCalibration();
+        } catch (error) {
+          status.textContent = 'Calibration failed: ' + (error && error.message ? error.message : String(error));
+        }
+      };
+
+      $('track').onclick = async () => {
+        if (tracking) {
+          tracking = false; calibrationActive = false; stream?.getTracks().forEach(track => track.stop());
+          $('track').textContent = 'Enable webcam tracking';
+          status.textContent = 'Webcam stopped';
+          return;
+        }
+
+        try {
+          status.textContent = 'Loading face tracker from local files...';
+          if (!landmarker) {
+            const vision = await FilesetResolver.forVisionTasks(wasmBaseUrl);
+            landmarker = await FaceLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetPath: modelUrl, delegate: 'CPU' },
+              runningMode: 'VIDEO',
+              numFaces: 1
+            });
+          }
+
+          if (!stream) {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            $('cam').srcObject = stream;
+            await $('cam').play();
+          }
+
+          tracking = true; neutral = null; trackYaw = 0; trackPitch = 0; baseYaw = yaw; basePitch = pitch;
+          $('track').textContent = 'Disable webcam tracking';
+          status.textContent = 'Tracking enabled. Press Calibrate Head Tracking to set your neutral position.';
+        } catch (error) {
+          console.error('Webcam tracker failed', error);
+          status.textContent = 'Webcam/tracker error: ' + (error && error.message ? error.message : String(error));
+        }
+      };
+
+      updateSettingLabels();
+      syncPlayButton();
+      showTopControls();
+      setTimeout(hideTopControls, 1800);
+      if (loadVideoCentre()) resetCameraToVideoCentre();
+    </script>
+  </body>
+</html>
